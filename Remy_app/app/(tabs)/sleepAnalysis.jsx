@@ -1,19 +1,117 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   StyleSheet, 
   View, 
   Text, 
   TouchableOpacity, 
   Image, 
-  TextInput 
+  TextInput,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-
-// If using expo-router or react-navigation, import and navigate accordingly.
-// For now, the home icon press is just a placeholder.
+import { Link } from 'expo-router';
+import { OPENAI_API_KEY } from '@env';
 
 export default function SleepAnalysisScreen() {
   const sleepDebtHours = 5.5;
+  const [messages, setMessages] = useState([
+    { role: 'assistant', content: 'Hello! I\'m Remy, your sleep assistant. How can I help you today?' }
+  ]);
+  const [inputMessage, setInputMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const scrollViewRef = useRef();
+
+  const handleSend = async () => {
+    if (!inputMessage.trim()) return;
+
+    // Add user message to chat
+    const userMessage = { role: 'user', content: inputMessage };
+    setMessages(prev => [...prev, userMessage]);
+    setInputMessage('');
+    setIsLoading(true);
+
+    try {
+      console.log('Starting chat request...');
+      
+      // Prepare messages for OpenAI
+      const chatMessages = [
+        { 
+          role: 'system', 
+          content: 'You are Remy, a sleep assistant. Provide helpful, concise advice about sleep, sleep hygiene, and sleep-related issues. Keep responses under 100 words and focus on practical, actionable advice.'
+        },
+        ...messages.map(msg => ({
+          role: msg.role,
+          content: msg.content
+        })),
+        userMessage
+      ];
+
+      console.log('Request payload:', JSON.stringify(chatMessages, null, 2));
+
+      // Call OpenAI API using fetch
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: "gpt-3.5-turbo",
+          messages: chatMessages,
+          max_tokens: 150,
+          temperature: 0.7,
+        })
+      });
+
+      console.log('Response status:', response.status);
+      const data = await response.json();
+      console.log('OpenAI Response:', JSON.stringify(data, null, 2));
+      
+      if (!response.ok) {
+        console.error('API Error:', data);
+        throw new Error(data.error?.message || 'Failed to get response');
+      }
+
+      // Add assistant's response to chat
+      const assistantMessage = {
+        role: 'assistant',
+        content: data.choices[0].message.content
+      };
+      setMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error('Error details:', error);
+      console.error('Error stack:', error.stack);
+      // Show error alert to user
+      Alert.alert(
+        'Error',
+        `Failed to get response: ${error.message}`,
+        [{ text: 'OK' }]
+      );
+      // Add error message to chat
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `I apologize, but I encountered an error: ${error.message}`
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (scrollViewRef.current) {
+      scrollViewRef.current.scrollToEnd({ animated: true });
+    }
+  }, [messages]);
+
+  // Handle keyboard submit
+  const handleSubmit = () => {
+    handleSend();
+  };
 
   return (
     <View style={styles.container}>
@@ -21,15 +119,13 @@ export default function SleepAnalysisScreen() {
         colors={['#6A608C', '#2E096D']}
         style={styles.gradient}
       >
-        {/* Top nav row */}
         <View style={styles.topNav}>
           {/* Left: Home Icon */}
-          <TouchableOpacity style={styles.navIcon} onPress={() => { /* Navigate home */ }}>
-            {/* Replace with your actual icon asset, e.g. <Image source={require('...')} /> */}
+          <TouchableOpacity style={styles.navIcon}>
             <Text style={styles.iconEmoji}>🏠</Text> 
           </TouchableOpacity>
           {/* Right: "Remy" */}
-          <Text style={styles.brandTitle}>Remy</Text>
+          <Link href="/(tabs)/dashboard" style={styles.brandTitle}>Remy</Link>
         </View>
 
         {/* Main Title */}
@@ -50,23 +146,54 @@ export default function SleepAnalysisScreen() {
         <Text style={styles.subtitle}>sleep duration</Text>
 
         {/* Chat Area */}
-        <View style={styles.chatContainer}>
-          <Text style={styles.chatTitle}>chat with Remy</Text>
-          <View style={styles.chatBox}>
-            {/* This would be the conversation area, omitted for brevity */}
-          </View>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.chatContainer}
+        >
+          <Text style={styles.chatTitle}>Chat with Remy</Text>
+          <ScrollView 
+            ref={scrollViewRef}
+            style={styles.chatBox}
+            contentContainerStyle={styles.chatBoxContent}
+          >
+            {messages.map((message, index) => (
+              <View 
+                key={index} 
+                style={[
+                  styles.messageContainer,
+                  message.role === 'user' ? styles.userMessage : styles.assistantMessage
+                ]}
+              >
+                <Text style={styles.messageText}>{message.content}</Text>
+              </View>
+            ))}
+            {isLoading && (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator color="#fff" />
+              </View>
+            )}
+          </ScrollView>
           <View style={styles.inputRow}>
             <TextInput
               style={styles.textInput}
               placeholder="Write your message"
               placeholderTextColor="#B8AFC4"
+              value={inputMessage}
+              onChangeText={setInputMessage}
+              multiline
+              maxLength={500}
+              onSubmitEditing={handleSubmit}
+              returnKeyType="send"
             />
-            <TouchableOpacity style={styles.sendButton} onPress={() => {/* handle send */}}>
-              {/* Replace with your own send icon if desired */}
+            <TouchableOpacity 
+              style={[styles.sendButton, !inputMessage.trim() && styles.sendButtonDisabled]} 
+              onPress={handleSend}
+              disabled={!inputMessage.trim() || isLoading}
+            >
               <Text style={styles.sendIcon}>➤</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </LinearGradient>
     </View>
   );
@@ -151,9 +278,9 @@ const styles = StyleSheet.create({
   },
   /* Chat area container */
   chatContainer: {
+    flex: 1,
     marginTop: 40,
     marginBottom: 20,
-    // flex: 1, // If you want it to expand to fill space
   },
   chatTitle: {
     fontSize: 20,
@@ -164,35 +291,68 @@ const styles = StyleSheet.create({
   },
   /* Chat messages box (blank purple panel) */
   chatBox: {
+    flex: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 20,
-    height: 150,
-    marginBottom: 10,
+    padding: 10,
+  },
+  chatBoxContent: {
+    paddingBottom: 10,
+  },
+  messageContainer: {
+    maxWidth: '80%',
+    padding: 12,
+    borderRadius: 15,
+    marginVertical: 5,
+  },
+  userMessage: {
+    backgroundColor: '#2E096D',
+    alignSelf: 'flex-end',
+    borderBottomRightRadius: 5,
+  },
+  assistantMessage: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignSelf: 'flex-start',
+    borderBottomLeftRadius: 5,
+  },
+  messageText: {
+    color: '#fff',
+    fontSize: 16,
   },
   /* Row for text input + send button */
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 25,
-    paddingHorizontal: 10,
+    marginTop: 10,
+    marginBottom: Platform.OS === 'ios' ? 20 : 10,
   },
   textInput: {
     flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 20,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
     color: '#fff',
-    paddingHorizontal: 10,
-    height: 50,
+    marginRight: 10,
+    maxHeight: 100,
   },
   sendButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#4F317B',
+    backgroundColor: '#2E096D',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  sendButtonDisabled: {
+    opacity: 0.5,
+  },
   sendIcon: {
-    fontSize: 20,
     color: '#fff',
+    fontSize: 18,
+  },
+  loadingContainer: {
+    padding: 10,
+    alignItems: 'center',
   },
 });

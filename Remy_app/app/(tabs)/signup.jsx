@@ -6,31 +6,66 @@ import {
   TouchableOpacity, 
   StyleSheet, 
   Alert, 
-  Image 
+  Image,
+  ActivityIndicator 
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Link } from 'expo-router';
-// import { firebase } from './firebase'; // Uncomment if you're using Firebase
+import { Link, router } from 'expo-router';
+import { auth } from '../../firebase_components/firebaseConfig';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 
-export default function SignupScreen({ navigation }) {
+export default function SignupScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSignup = () => {
+  const handleSignup = async () => {
     if (password !== confirmPassword) {
       Alert.alert('Error', 'Passwords do not match.');
       return;
     }
-    // If using Firebase:
-    // firebase.auth().createUserWithEmailAndPassword(email, password)
-    //   .then(userCredential => {
-    //     console.log('User created with:', userCredential.user.email);
-    //   })
-    //   .catch(error => {
-    //     Alert.alert('Signup Error', error.message);
-    //   });
-    Alert.alert('Signup Attempt', 'Replace with Firebase or other auth logic.');
+
+    if (password.length < 6) {
+      Alert.alert('Error', 'Password should be at least 6 characters long.');
+      return;
+    }
+
+    if (!email || !password) {
+      Alert.alert('Error', 'Please fill in all fields.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      console.log('User created successfully:', user.email);
+      Alert.alert('Success', 'Account created successfully!', [
+        {
+          text: 'OK',
+          onPress: () => router.replace('/login')
+        }
+      ]);
+    } catch (error) {
+      let errorMessage = 'An error occurred during signup.';
+      switch (error.code) {
+        case 'auth/email-already-in-use':
+          errorMessage = 'This email is already registered.';
+          break;
+        case 'auth/invalid-email':
+          errorMessage = 'Please enter a valid email address.';
+          break;
+        case 'auth/weak-password':
+          errorMessage = 'Password is too weak.';
+          break;
+        default:
+          errorMessage = error.message;
+      }
+      Alert.alert('Signup Error', errorMessage);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -39,15 +74,9 @@ export default function SignupScreen({ navigation }) {
         colors={['#6A608C', '#2E096D']} 
         style={styles.gradient}
       >
-        {/* Top header with brand title (optional image on top-right) */}
+        {/* Top header with brand title */}
         <View style={styles.header}>
           <Text style={styles.brandTitle}>Remy</Text>
-          {/* If you'd like an image in the top-right, uncomment and update path:
-          <Image 
-            source={require('@/assets/images/top-right.png')} 
-            style={styles.topRightImage} 
-          />
-          */}
         </View>
 
         {/* Main signup form content */}
@@ -62,6 +91,8 @@ export default function SignupScreen({ navigation }) {
             autoCapitalize="none"
             value={email}
             onChangeText={setEmail}
+            editable={!loading}
+            textContentType="emailAddress"
           />
 
           <TextInput
@@ -71,6 +102,9 @@ export default function SignupScreen({ navigation }) {
             secureTextEntry
             value={password}
             onChangeText={setPassword}
+            editable={!loading}
+            textContentType="newPassword"
+            autoComplete="new-password"
           />
 
           <TextInput
@@ -80,13 +114,26 @@ export default function SignupScreen({ navigation }) {
             secureTextEntry
             value={confirmPassword}
             onChangeText={setConfirmPassword}
+            editable={!loading}
+            textContentType="newPassword"
+            autoComplete="new-password"
           />
 
-          <TouchableOpacity style={styles.button} onPress={handleSignup}>
-            <Text style={styles.buttonText}>Sign Up</Text>
+          <TouchableOpacity 
+            style={[styles.button, loading && styles.buttonDisabled]} 
+            onPress={handleSignup}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Sign Up</Text>
+            )}
           </TouchableOpacity>
 
-           <Link href="/login" style={styles.link}>ALready have an account? Log in</Link>
+          <Link href="/login" style={styles.link} disabled={loading}>
+            Already have an account? Log in
+          </Link>
         </View>
       </LinearGradient>
     </View>
@@ -94,18 +141,15 @@ export default function SignupScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  /* Outer container to fill screen */
   container: {
     flex: 1,
   },
-  /* Gradient background styling */
   gradient: {
     flex: 1,
     paddingHorizontal: 30,
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  /* Header row (top-left brand, optional top-right image) */
   header: {
     marginTop: 60,
     width: '100%',
@@ -114,16 +158,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   brandTitle: {
-    fontFamily: 'Poppins-Regular', // Ensure Poppins is loaded
+    fontFamily: 'Poppins-Regular',
     fontSize: 28,
     color: '#fff',
   },
-  topRightImage: {
-    width: 100,
-    height: 100,
-    resizeMode: 'contain',
-  },
-  /* Main signup form area */
   mainContent: {
     flex: 1,
     width: '100%',
@@ -135,26 +173,24 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
     marginBottom: 40,
-    textAlign: 'left', // or 'center'
+    textAlign: 'left',
   },
-  /* Bubble-shaped inputs */
   input: {
     fontFamily: 'Poppins-Regular',
     height: 50,
     borderColor: '#ccc',
     borderWidth: 1,
-    borderRadius: 30,        // bubble corners
+    borderRadius: 30,
     paddingHorizontal: 20,
     fontSize: 16,
     backgroundColor: '#fff',
     marginBottom: 20,
   },
-  /* Bubble-shaped button with #2E096D background */
   button: {
     fontFamily: 'Poppins-Regular',
     backgroundColor: '#2E096D',
     paddingVertical: 15,
-    borderRadius: 30, // bubble corners
+    borderRadius: 30,
     marginBottom: 10,
   },
   buttonText: {
@@ -169,5 +205,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 10,
     fontSize: 16,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
 });

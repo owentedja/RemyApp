@@ -1,50 +1,69 @@
 import React, { useState } from 'react';
 import { 
-  StyleSheet, 
   View, 
   Text, 
   TextInput, 
   TouchableOpacity, 
+  StyleSheet, 
   Alert, 
-  Image 
+  Image,
+  ActivityIndicator 
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Link } from 'expo-router';
-// import { firebase } from './firebase'; // Uncomment if using Firebase
+import { Link, router } from 'expo-router';
+import { auth } from '../../firebase_components/firebaseConfig';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 
-export default function LoginScreen({ navigation }) {
+export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
-    // If using Firebase:
-    // firebase.auth().signInWithEmailAndPassword(email, password)
-    //   .then(userCredential => {
-    //     const user = userCredential.user;
-    //     console.log('Logged in with:', user.email);
-    //   })
-    //   .catch(error => {
-    //     Alert.alert('Login Error', error.message);
-    //   });
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please fill in all fields.');
+      return;
+    }
 
-    console.log('Email:', email);
-    console.log('Password:', password);
-    Alert.alert('Login Attempt', 'Replace with Firebase or other auth logic.');
+    try {
+      setLoading(true);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      console.log('User logged in successfully:', user.email);
+      router.replace('/dashboard');
+    } catch (error) {
+      let errorMessage = 'An error occurred during login.';
+      switch (error.code) {
+        case 'auth/invalid-email':
+          errorMessage = 'Please enter a valid email address.';
+          break;
+        case 'auth/user-disabled':
+          errorMessage = 'This account has been disabled.';
+          break;
+        case 'auth/user-not-found':
+          errorMessage = 'No account found with this email.';
+          break;
+        case 'auth/wrong-password':
+          errorMessage = 'Incorrect password.';
+          break;
+        default:
+          errorMessage = error.message;
+      }
+      Alert.alert('Login Error', errorMessage);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <View style={styles.container}>
       <LinearGradient 
-        colors={['#6A608C', '#2E096D']}
+        colors={['#6A608C', '#2E096D']} 
         style={styles.gradient}
       >
-        {/* Top header with brand title (optional image on top-right) */}
+        {/* Top header with brand title */}
         <View style={styles.header}>
           <Text style={styles.brandTitle}>Remy</Text>
-          {/* <Image
-            source={require('@/assets/images/top-right.png')}
-            style={styles.topRightImage}
-          /> */}
         </View>
 
         {/* Main login form content */}
@@ -59,6 +78,8 @@ export default function LoginScreen({ navigation }) {
             autoCapitalize="none"
             value={email}
             onChangeText={setEmail}
+            editable={!loading}
+            textContentType="emailAddress"
           />
 
           <TextInput
@@ -68,13 +89,26 @@ export default function LoginScreen({ navigation }) {
             secureTextEntry
             value={password}
             onChangeText={setPassword}
+            editable={!loading}
+            textContentType="password"
+            autoComplete="password"
           />
 
-          <TouchableOpacity style={styles.button} onPress={handleLogin}>
-            <Text style={styles.buttonText}>Log In</Text>
+          <TouchableOpacity 
+            style={[styles.button, loading && styles.buttonDisabled]} 
+            onPress={handleLogin}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Login</Text>
+            )}
           </TouchableOpacity>
 
-          <Link href="/signup" style={styles.link}>Don't have an account? Sign Up</Link>
+          <Link href="/signup" style={styles.link} disabled={loading}>
+            Don't have an account? Sign up
+          </Link>
         </View>
       </LinearGradient>
     </View>
@@ -82,18 +116,15 @@ export default function LoginScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  /* Outer container to fill screen */
   container: {
     flex: 1,
   },
-  /* Gradient background styling */
   gradient: {
     flex: 1,
     paddingHorizontal: 30,
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  /* Header row (top-left brand, optional top-right image) */
   header: {
     marginTop: 60,
     width: '100%',
@@ -102,16 +133,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   brandTitle: {
-    fontFamily: 'Poppins-Regular', // Ensure Poppins is loaded
+    fontFamily: 'Poppins-Regular',
     fontSize: 28,
     color: '#fff',
   },
-  topRightImage: {
-    width: 100,
-    height: 100,
-    resizeMode: 'contain',
-  },
-  /* Main login form area */
   mainContent: {
     flex: 1,
     width: '100%',
@@ -123,26 +148,24 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
     marginBottom: 40,
-    textAlign: 'left', // or 'center'
+    textAlign: 'left',
   },
-  /* Bubble-shaped inputs */
   input: {
     fontFamily: 'Poppins-Regular',
     height: 50,
     borderColor: '#ccc',
     borderWidth: 1,
-    borderRadius: 30,        // Bubble corners
-    paddingHorizontal: 20,   // More horizontal padding
+    borderRadius: 30,
+    paddingHorizontal: 20,
     fontSize: 16,
     backgroundColor: '#fff',
     marginBottom: 20,
   },
-  /* Bubble-shaped button with #2E096D background */
   button: {
     fontFamily: 'Poppins-Regular',
     backgroundColor: '#2E096D',
     paddingVertical: 15,
-    borderRadius: 30, // bubble corners
+    borderRadius: 30,
     marginBottom: 10,
   },
   buttonText: {
@@ -158,4 +181,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 16,
   },
-});
+  buttonDisabled: {
+    opacity: 0.7,
+  },
+}); 

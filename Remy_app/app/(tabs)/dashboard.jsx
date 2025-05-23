@@ -24,15 +24,12 @@ export default function DashboardScreen() {
         <View style={styles.cardsContainer}>
           
           {/* Sleep Analysis Card */}
-          <TouchableOpacity 
-            style={styles.card} 
-            onPress={() => {
-              // navigate or handle press
-            }}
-          >
+          <Link href= "/sleepAnalysis" asChild> 
+          <TouchableOpacity style={styles.card} >
             <Text style={styles.cardIcon}>🌙</Text>
             <Text style={styles.cardText}>Sleep Analysis</Text>
           </TouchableOpacity>
+          </Link>
           
           {/* Sleep Audio Card with Link */}
           <Link href="/musicGenerator" asChild>
